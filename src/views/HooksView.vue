@@ -123,7 +123,7 @@ const selectHook = (id: string) => {
 <template>
   <div class="flex h-[calc(100vh-64px)] overflow-hidden bg-neutral-50 dark:bg-neutral-900 transition-colors duration-300">
     <!-- Sidebar -->
-    <aside class="w-64 flex-shrink-0 border-r border-neutral-200/50 dark:border-neutral-800/50 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-md overflow-y-auto hidden md:block transition-colors duration-300">
+    <aside class="w-64 flex-shrink-0 border-r border-neutral-200/50 dark:border-neutral-800/50 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-md overflow-y-auto hidden md:block transition-colors duration-300 custom-scrollbar">
       <div class="p-4">
         <div class="relative mb-6">
           <input 
@@ -169,3 +169,39 @@ const selectHook = (id: string) => {
     </main>
   </div>
 </template>
+
+<style>
+/* Custom Scrollbar Styles - Non-scoped to ensure browser compatibility */
+.custom-scrollbar {
+  /* Firefox support */
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.custom-scrollbar:hover {
+  /* Firefox support */
+  scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 4px;
+}
+
+.custom-scrollbar:hover::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.5);
+}
+
+.custom-scrollbar::-webkit-scrollbar-button {
+  display: none;
+}
+</style>

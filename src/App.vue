@@ -24,6 +24,11 @@ const { t, toggleLanguage, currentLang } = useLanguage()
               <i class="i-carbon-code text-lg"></i>
               <span>{{ t.nav.hooks }}</span>
             </router-link>
+
+            <router-link to="/more" class="hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-primary dark:hover:text-primary transition-all duration-200 no-underline">
+              <i class="i-carbon-list text-lg"></i>
+              <span>{{ t.nav.more }}</span>
+            </router-link>
             
             <a href="https://github.com" target="_blank" class="w-10 h-10 flex items-center justify-center rounded-xl text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-primary dark:hover:text-primary transition-all duration-200 no-underline" title="GitHub">
               <i class="i-carbon-logo-github text-xl"></i>
@@ -31,11 +36,11 @@ const { t, toggleLanguage, currentLang } = useLanguage()
 
             <div class="w-px h-6 bg-neutral-200 dark:bg-neutral-700 mx-2 hidden sm:block"></div>
             
-            <button class="w-10 h-10 flex items-center justify-center rounded-xl border border-neutral-200 dark:border-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-white dark:hover:bg-neutral-800 hover:text-primary dark:hover:text-primary transition-all duration-200 hover:shadow-md hover:-translate-y-[2px]" @click="toggleDark()" title="Toggle Theme">
+            <button class="w-10 h-10 flex items-center justify-center rounded-xl text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-primary dark:hover:text-primary transition-all duration-200 border-none outline-none" @click="toggleDark()" title="Toggle Theme">
               <i :class="isDark ? 'i-carbon-moon' : 'i-carbon-sun'" class="text-xl"></i>
             </button>
             
-            <button class="h-10 flex items-center gap-2 px-3 rounded-xl border border-neutral-200 dark:border-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-white dark:hover:bg-neutral-800 hover:text-primary dark:hover:text-primary transition-all duration-200 hover:shadow-md hover:-translate-y-[2px]" @click="toggleLanguage()" title="Switch Language">
+            <button class="h-10 flex items-center gap-2 px-3 rounded-xl text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-primary dark:hover:text-primary transition-all duration-200 border-none outline-none" @click="toggleLanguage()" title="Switch Language">
               <i class="i-carbon-translate text-xl"></i>
               <span class="text-sm font-medium hidden sm:block">{{ currentLang === 'en' ? 'EN' : '中文' }}</span>
             </button>

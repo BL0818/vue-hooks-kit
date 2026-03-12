@@ -30,7 +30,7 @@ describe('Performance Hooks', () => {
     });
 
     it('should call the latest implementation', async () => {
-      let count = 0;
+      const count = 0;
       const impl1 = () => count;
       const impl2 = () => count + 1;
       

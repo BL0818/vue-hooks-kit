@@ -53,6 +53,39 @@ export default defineConfig({
     // 链接：主色、无下划线、悬浮透明度
     'app-link': 'text-primary no-underline transition-colors duration-200 hover:text-primary/80 cursor-pointer',
   },
+  preflights: [
+    {
+      getCSS: ({ theme }) => `
+        ::-webkit-scrollbar {
+          width: 8px;
+          height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+          background-color: ${(theme as any).colors?.neutral?.[300] ?? '#d1d5db'};
+          border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+          background-color: ${(theme as any).colors?.neutral?.[400] ?? '#9ca3af'};
+        }
+        .dark ::-webkit-scrollbar-thumb {
+          background-color: ${(theme as any).colors?.neutral?.[700] ?? '#374151'};
+        }
+        .dark ::-webkit-scrollbar-thumb:hover {
+          background-color: ${(theme as any).colors?.neutral?.[600] ?? '#4b5563'};
+        }
+        * {
+          scrollbar-width: thin;
+          scrollbar-color: ${(theme as any).colors?.neutral?.[300] ?? '#d1d5db'} transparent;
+        }
+        .dark * {
+          scrollbar-color: ${(theme as any).colors?.neutral?.[700] ?? '#374151'} transparent;
+        }
+      `,
+    },
+  ],
   safelist: [
     'i-carbon-checkmark-filled',
     'i-carbon-code',
