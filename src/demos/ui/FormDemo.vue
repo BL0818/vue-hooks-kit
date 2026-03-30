@@ -103,7 +103,7 @@ const api = [
   >
     <section class="max-w-lg mx-auto">
       <h2 class="text-xl font-semibold mb-6 text-neutral-800 dark:text-neutral-200 flex items-center gap-2">
-        <div class="i-carbon-form-dataset text-primary text-2xl" />
+        <div class="i-carbon-data-set text-primary text-2xl" />
         {{ t.demo.form.title }}
       </h2>
       

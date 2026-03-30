@@ -66,7 +66,7 @@ const api = [
         <div class="bg-neutral-100 dark:bg-neutral-900 rounded-xl p-4 min-h-[160px] border border-neutral-200 dark:border-neutral-800 relative overflow-hidden group">
           <div class="absolute top-2 right-2 text-xs text-neutral-400 font-mono opacity-50">LOGS</div>
           <div v-if="logs.length === 0" class="flex flex-col items-center justify-center h-full text-neutral-400 gap-2 opacity-60">
-            <div class="i-carbon-console text-3xl" />
+            <div class="i-carbon-terminal text-3xl" />
             <span class="text-sm">No events yet</span>
           </div>
           <transition-group 
