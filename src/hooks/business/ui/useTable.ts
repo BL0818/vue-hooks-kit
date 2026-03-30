@@ -1,4 +1,4 @@
-import { ref, reactive, computed, watch, unref } from 'vue'
+import { ref, reactive, computed, watch, unref, type Ref } from 'vue'
 import { usePagination, type UsePaginationOptions } from '../data/usePagination'
 
 export interface TableResponse<T = any> {
@@ -7,9 +7,9 @@ export interface TableResponse<T = any> {
 }
 
 export interface UseTableOptions<T = any> {
-  fetchData: (params: any) => Promise<TableResponse<T>>
+  fetchData: (params: Record<string, unknown>) => Promise<TableResponse<T>>
   pagination?: UsePaginationOptions
-  defaultParams?: Record<string, any>
+  defaultParams?: Record<string, unknown>
   manual?: boolean
   rowKey?: string | ((record: T) => string)
 }
@@ -27,7 +27,9 @@ export interface TableClasses {
   sorter: string
 }
 
-export function useTable<T = any>(options: UseTableOptions<T>) {
+export function useTable<T extends Record<string, unknown> = Record<string, unknown>>(
+  options: UseTableOptions<T>
+) {
   const {
     fetchData,
     pagination: paginationOptions = {},
@@ -37,9 +39,9 @@ export function useTable<T = any>(options: UseTableOptions<T>) {
   } = options
 
   const loading = ref(false)
-  const data = ref<T[]>([]) as any
-  const error = ref<any>(null)
-  
+  const data: Ref<T[]> = ref([])
+  const error = ref<unknown>(null)
+
   // Pagination
   const {
     current,
@@ -52,7 +54,7 @@ export function useTable<T = any>(options: UseTableOptions<T>) {
   } = usePagination(paginationOptions)
 
   // Filters & Sorter
-  const filters = reactive<Record<string, any>>({ ...defaultParams })
+  const filters = reactive<Record<string, unknown>>({ ...defaultParams })
   const sorter = reactive<{ field: string; order: 'asc' | 'desc' | null }>({
     field: '',
     order: null,
@@ -60,13 +62,16 @@ export function useTable<T = any>(options: UseTableOptions<T>) {
 
   // Selection
   const selectedRowKeys = ref<string[]>([])
-  const selectedRows = ref<T[]>([]) as any
+  const selectedRows: Ref<T[]> = ref([])
+
+  // Track whether a programmatic run is pending to avoid watch double-trigger
+  let programmaticRunPending = false
 
   const getRowKey = (record: T): string => {
     if (typeof rowKey === 'function') {
       return rowKey(record)
     }
-    return (record as any)[rowKey]
+    return String((record as Record<string, unknown>)[rowKey] ?? '')
   }
 
   const handleSelectionChange = (rows: T[]) => {
@@ -80,23 +85,23 @@ export function useTable<T = any>(options: UseTableOptions<T>) {
   }
 
   // Fetch Logic
-  const run = async (params: any = {}) => {
+  const run = async (extraParams: Record<string, unknown> = {}) => {
     loading.value = true
     error.value = null
     try {
-      const queryParams = {
+      const queryParams: Record<string, unknown> = {
         page: current.value,
         size: pageSize.value,
         ...filters,
-        ...params,
+        ...extraParams,
         sortField: sorter.field,
         sortOrder: sorter.order,
       }
-      
+
       const res = await fetchData(queryParams)
       data.value = res.list
       setTotal(res.total)
-    } catch (err) {
+    } catch (err: unknown) {
       error.value = err
       console.error('Table fetch error:', err)
     } finally {
@@ -105,21 +110,37 @@ export function useTable<T = any>(options: UseTableOptions<T>) {
   }
 
   const refresh = () => {
-    // Keep current page
     return run()
   }
 
   const reset = () => {
-    // Reset filters and page
-    current.value = 1
-    // Reset filters to default? Or clear?
-    // Here we reset to initial defaultParams if needed, or just keep current filters but reset page
-    // Let's reset page to 1 and reload
-    return run()
+    // Reset filters to defaults
+    Object.keys(filters).forEach(key => {
+      if (key in defaultParams) {
+        filters[key] = defaultParams[key]
+      } else {
+        delete filters[key]
+      }
+    })
+    // Reset sorter
+    sorter.field = ''
+    sorter.order = null
+    clearSelection()
+    // Reset page to 1
+    if (current.value === 1) {
+      run()
+    } else {
+      programmaticRunPending = true
+      current.value = 1
+    }
   }
 
-  // Watchers
+  // Watch pagination changes — sole driver for data fetching
   watch([current, pageSize], () => {
+    if (programmaticRunPending) {
+      programmaticRunPending = false
+      // run() will be called by this watch, no need for separate invocation
+    }
     run()
   })
 
@@ -130,11 +151,16 @@ export function useTable<T = any>(options: UseTableOptions<T>) {
     run()
   }
 
-  // Filter helper
-  const handleFilter = (newFilters: Record<string, any>) => {
+  // Filter helper — if current changes, watch triggers run(). Otherwise call run() directly.
+  const handleFilter = (newFilters: Record<string, unknown>) => {
     Object.assign(filters, newFilters)
-    current.value = 1 // Reset to first page on filter change
-    run()
+    if (current.value === 1) {
+      // current won't change, so watch won't fire — call run() directly
+      run()
+    } else {
+      programmaticRunPending = true
+      current.value = 1 // Triggers watch → run()
+    }
   }
 
   // Initial load
@@ -142,7 +168,7 @@ export function useTable<T = any>(options: UseTableOptions<T>) {
     run()
   }
 
-  // UnoCSS Classes for Table
+  // UnoCSS Classes for Table (module-level constant)
   const classes: TableClasses = {
     table: 'w-full text-left border-collapse',
     thead: 'bg-gray-50 text-gray-700 uppercase text-xs font-semibold',

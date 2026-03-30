@@ -1,5 +1,4 @@
 import { ref, onMounted, onUnmounted, unref, type Ref, watch, isRef, type MaybeRef } from 'vue'
-import { useMounted, useUnmount } from './lifecycle'
 
 // --- useEventListener ---
 
@@ -30,7 +29,7 @@ export function useEventListener(
     }, { immediate: true })
   } else {
     // 非 ref，直接挂载
-    useMounted(() => {
+    onMounted(() => {
       const el = target as EventTarget
       if (el) {
         el.addEventListener(event, callback, options)
@@ -38,23 +37,30 @@ export function useEventListener(
     })
   }
 
-  useUnmount(cleanup)
+  onUnmounted(cleanup)
 
   return stop
 }
 
+// --- isClient helper ---
+
+const isClient = typeof window !== 'undefined'
+
 // --- useWindowSize ---
 
 export function useBasicWindowSize() {
-  const width = ref(window.innerWidth)
-  const height = ref(window.innerHeight)
+  const width = ref(isClient ? window.innerWidth : 0)
+  const height = ref(isClient ? window.innerHeight : 0)
 
   const update = () => {
+    if (!isClient) return
     width.value = window.innerWidth
     height.value = window.innerHeight
   }
 
-  useEventListener(window, 'resize', update)
+  if (isClient) {
+    useEventListener(window, 'resize', update)
+  }
 
   return { width, height }
 }
@@ -79,7 +85,7 @@ export function useElementSize(target: Ref<HTMLElement | null>) {
     }
   }
 
-  useMounted(() => {
+  onMounted(() => {
     const el = unref(target)
     if (el) {
       width.value = el.offsetWidth
@@ -96,22 +102,14 @@ export function useElementSize(target: Ref<HTMLElement | null>) {
     }
   })
 
-  useUnmount(cleanup)
+  onUnmounted(cleanup)
 
   return { width, height }
 }
 
 // --- useResize ---
-// Alias for useElementSize or combined utility?
-// User asked for "useResize (listen to element/window size)"
-// I will export useWindowSize and useElementSize separately, and maybe a combined useResize if needed.
-// But for now, let's stick to specific ones as they are cleaner.
-// I'll implement useResize as a wrapper that can handle both if target is provided or not, 
-// but useElementSize takes a target. useWindowSize doesn't.
-// Let's implement useResize as an alias to useElementSize for now, or just export useElementSize and useWindowSize.
-// The user explicitly listed useResize. Let's make it a general purpose hook.
 
-export function useResize(target?: Ref<HTMLElement | null>) {
+export function useResize(target?: Ref<HTMLElement | null>): { width: Ref<number>, height: Ref<number> } {
   if (target) {
     return useElementSize(target)
   } else {
@@ -121,7 +119,7 @@ export function useResize(target?: Ref<HTMLElement | null>) {
 
 // --- useScroll ---
 
-export function useScroll(target: Ref<HTMLElement | null | undefined> | Window = window) {
+export function useScroll(target: Ref<HTMLElement | null | undefined> | Window = (isClient ? window : undefined as unknown as Window)) {
   const x = ref(0)
   const y = ref(0)
 
@@ -137,7 +135,9 @@ export function useScroll(target: Ref<HTMLElement | null | undefined> | Window =
     }
   }
 
-  useEventListener(target as any, 'scroll', update, { passive: true })
+  if (isClient) {
+    useEventListener(target as EventTarget, 'scroll', update as EventListener, { passive: true })
+  }
 
   return { x, y }
 }
@@ -148,6 +148,8 @@ export function useClickOutside(
   target: Ref<HTMLElement | null>,
   handler: (event: MouseEvent) => void
 ) {
+  if (!isClient) return
+
   const listener = (event: MouseEvent) => {
     const el = unref(target)
     if (!el) return

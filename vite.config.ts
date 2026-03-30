@@ -34,10 +34,14 @@ export default defineConfig({
       fileName: (format) => `vue-hooks-kit.${format}.js`,
     },
     rollupOptions: {
-      external: ['vue'],
+      external: ['vue', '@vueuse/core', 'axios', 'vue-router', 'pinia'],
       output: {
         globals: {
           vue: 'Vue',
+          '@vueuse/core': 'VueUse',
+          axios: 'axios',
+          'vue-router': 'VueRouter',
+          pinia: 'Pinia',
         },
       },
     },

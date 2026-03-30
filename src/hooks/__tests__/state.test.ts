@@ -1,6 +1,8 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { useCounter, useLocalStorage, useDebouncedRef } from '../basic/state'
-import { nextTick, ref } from 'vue'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { useLocalStorage, useSessionStorage, useCounter, useDebouncedRef, useThrottledRef } from '../basic/state'
+import { nextTick } from 'vue'
+
+import type { StorageOptions } from '../basic/state'
 
 describe('State Hooks', () => {
   beforeEach(() => {
@@ -12,6 +14,8 @@ describe('State Hooks', () => {
   afterEach(() => {
     vi.useRealTimers()
   })
+
+  // --- useCounter ---
 
   describe('useCounter', () => {
     it('should work with default values', () => {
@@ -27,7 +31,7 @@ describe('State Hooks', () => {
       expect(count.value).toBe(10)
     })
 
-    it('should work with min/max', () => {
+    it('should respect min/max bounds', () => {
       const [count, { inc, dec }] = useCounter(10, { min: 0, max: 15 })
       inc(10)
       expect(count.value).toBe(15) // capped at max
@@ -36,70 +40,131 @@ describe('State Hooks', () => {
     })
   })
 
+  // --- useLocalStorage ---
+
   describe('useLocalStorage', () => {
     it('should store and retrieve values', () => {
       const storage = useLocalStorage('test-key', 'default')
       expect(storage.value).toBe('default')
-      
+
       storage.value = 'new-value'
-      // Wait for watch callback
       return nextTick().then(() => {
-        expect(localStorage.getItem('test-key')).toContain('new-value')
+        const raw = localStorage.getItem('test-key')
+        expect(raw).not.toBeNull()
+        if (raw) {
+          // New format: serializer.write stores the value directly (JSON.stringify by default)
+          const parsed = JSON.parse(raw)
+          expect(parsed).toBe('new-value')
+        }
       })
     })
 
-    it('should handle expiration', () => {
-      vi.useFakeTimers()
+    it('should NOT overwrite existing storage data on initialization', () => {
+      // Pre-populate with existing data in the old { value, expire } wrapper format
+      localStorage.setItem('existing-key', JSON.stringify({ value: 'existing-data', expire: null }))
+
+      const storage = useLocalStorage('existing-key', 'default')
+      expect(storage.value).toBe('existing-data')
+    })
+
+    it('should NOT write to storage on init when loading existing data', async () => {
+      localStorage.setItem('preexisting-key', JSON.stringify({ value: 'saved-data', expire: null }))
+
+      const storage = useLocalStorage('preexisting-key', 'default')
+      expect(storage.value).toBe('saved-data')
+
+      await nextTick()
+      // Storage should NOT have been overwritten
+      const raw = localStorage.getItem('preexisting-key')
+      expect(raw).toBe(JSON.stringify({ value: 'saved-data', expire: null }))
+    })
+
+    it('should use custom serializer for writing', async () => {
+      const writeFn = vi.fn((value: unknown) => JSON.stringify({ custom: value }))
+      const readFn = vi.fn((raw: string) => {
+        const parsed = JSON.parse(raw)
+        return parsed.custom
+      })
+
+      const storage = useLocalStorage('serialized-key', 'default', {
+        serializer: { read: readFn, write: writeFn },
+      })
+
+      storage.value = 'custom-value'
+
+      await nextTick()
+
+      // serializer.write should have been called
+      expect(writeFn).toHaveBeenCalled()
+    })
+
+    it('should clear expired data', () => {
       const now = Date.now()
       vi.setSystemTime(now)
-      
-      const storage = useLocalStorage('expire-key', 'default', { expire: 1000 })
-      storage.value = 'temp-value'
-      
-      // Wait for storage write
+
+      // Manually set expired data
+      localStorage.setItem('expired-key', JSON.stringify({ value: 'old-data', expire: now - 1000 }))
+
+      const storage = useLocalStorage('expired-key', 'default', { expire: 500 })
+      expect(storage.value).toBe('default')
+    })
+  })
+
+  // --- useSessionStorage ---
+
+  describe('useSessionStorage', () => {
+    it('should store and retrieve values from sessionStorage', () => {
+      const storage = useSessionStorage('session-key', 'default')
+      expect(storage.value).toBe('default')
+
+      storage.value = 'session-value'
       return nextTick().then(() => {
-        // Fast-forward time past expiration
-        vi.setSystemTime(now + 1500)
-        
-        // Re-initialize to simulate page reload/new component mount
-        const storage2 = useLocalStorage('expire-key', 'default', { expire: 1000 })
-        
-        // It should have expired and returned default
-        // However, since we are in the same test run, storage2 is a new ref.
-        // The implementation reads from localStorage on init.
-        // If expired, it removes item and uses default.
-        // Then the watcher immediately writes the default value back to storage with a new expiration.
-        expect(storage2.value).toBe('default')
-        
-        const raw = localStorage.getItem('expire-key')
+        const raw = sessionStorage.getItem('session-key')
         expect(raw).not.toBeNull()
         if (raw) {
           const parsed = JSON.parse(raw)
-          expect(parsed.value).toBe('default')
+          expect(parsed).toBe('session-value')
         }
-        
-        vi.useRealTimers()
       })
     })
   })
 
+  // --- useDebouncedRef ---
+
   describe('useDebouncedRef', () => {
     it('should debounce value changes', () => {
-      vi.useFakeTimers()
       const val = useDebouncedRef('initial', 100)
-      
+
       expect(val.value).toBe('initial')
       val.value = 'updated'
-      
-      // Should not update immediately (sync access to value might return old value or new value depending on implementation)
-      // CustomRef implementation:
-      // get() returns value. set() sets timeout to update value.
-      // So immediately after set, get() should return old value.
-      expect(val.value).toBe('initial') 
-      
+
+      // Should not update immediately
+      expect(val.value).toBe('initial')
+
       vi.advanceTimersByTime(150)
       expect(val.value).toBe('updated')
-      vi.useRealTimers()
+    })
+  })
+
+  // --- useThrottledRef ---
+
+  describe('useThrottledRef', () => {
+    it('should throttle rapid value changes', () => {
+      const val = useThrottledRef('initial', 100)
+
+      expect(val.value).toBe('initial')
+
+      // First change should apply immediately
+      val.value = 'change-1'
+      expect(val.value).toBe('change-1')
+
+      // Rapid subsequent change should be throttled
+      val.value = 'change-2'
+      expect(val.value).toBe('change-1')
+
+      // After delay, the throttled value should apply
+      vi.advanceTimersByTime(150)
+      expect(val.value).toBe('change-2')
     })
   })
 })

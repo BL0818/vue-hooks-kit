@@ -1,6 +1,10 @@
-import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted, type Ref } from 'vue'
 import { useLocalStorage } from './state'
 import { useEventListener } from './dom'
+
+// --- isClient helper ---
+
+const isClient = typeof window !== 'undefined'
 
 // --- useThemeMode ---
 
@@ -9,10 +13,7 @@ export type ThemeMode = 'light' | 'dark' | 'auto'
 export interface UseThemeModeOptions {
   selector?: string // default: 'html'
   attribute?: string // default: 'data-theme'
-  autoValue?: string // default: 'auto' (value to set when mode is auto, or maybe null to remove attribute?)
-                   // Actually, usually when auto, we detect system preference.
   storageKey?: string // default: 'vue-hooks-kit-theme'
-  emitAuto?: boolean // whether to emit 'auto' as value or resolved value
 }
 
 export function useThemeMode(options: UseThemeModeOptions = {}) {
@@ -23,22 +24,30 @@ export function useThemeMode(options: UseThemeModeOptions = {}) {
   } = options
 
   const mode = useLocalStorage<ThemeMode>(storageKey, 'auto')
-  const systemDark = ref(window.matchMedia('(prefers-color-scheme: dark)').matches)
+  const systemDark = ref(false)
+
+  // Initialize system preference after mount (SSR safe)
+  if (isClient) {
+    systemDark.value = window.matchMedia('(prefers-color-scheme: dark)').matches
+  }
 
   const updateSystemTheme = (e: Event) => {
     systemDark.value = (e as MediaQueryListEvent).matches
   }
 
-  useEventListener(window.matchMedia('(prefers-color-scheme: dark)'), 'change', updateSystemTheme)
-
-  // Initial check redundant if initialized above, but kept for HMR or edge cases
-  onMounted(() => {
-    systemDark.value = window.matchMedia('(prefers-color-scheme: dark)').matches
-  })
+  if (isClient) {
+    useEventListener(
+      window.matchMedia('(prefers-color-scheme: dark)'),
+      'change',
+      updateSystemTheme
+    )
+  }
 
   watch(
     [mode, systemDark],
     () => {
+      if (!isClient) return
+
       const el = document.querySelector(selector)
       if (!el) return
 
@@ -81,7 +90,7 @@ const breakpoints = {
   lg: 1024,
   xl: 1280,
   '2xl': 1536,
-}
+} as const
 
 export type BreakpointKey = keyof typeof breakpoints
 
@@ -95,16 +104,15 @@ export function useResponsive() {
     '2xl': false,
   })
 
-  const queries: Record<string, MediaQueryList> = {}
-
   const update = () => {
+    if (!isClient) return
+
     const width = window.innerWidth
-    // Find largest breakpoint that matches
     let matched: BreakpointKey | undefined = undefined
-    
+
     // Sort breakpoints descending
     const sorted = Object.entries(breakpoints).sort((a, b) => b[1] - a[1]) as [BreakpointKey, number][]
-    
+
     for (const [key, val] of sorted) {
       if (width >= val) {
         if (!matched) matched = key
@@ -116,11 +124,13 @@ export function useResponsive() {
     current.value = matched
   }
 
-  useEventListener(window, 'resize', update)
-  
-  onMounted(() => {
-    update()
-  })
+  if (isClient) {
+    useEventListener(window, 'resize', update)
+
+    onMounted(() => {
+      update()
+    })
+  }
 
   return {
     current,

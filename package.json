@@ -1,6 +1,6 @@
 {
   "name": "@vuehookskit/vue-hooks-kit",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": false,
   "description": "A high-reuse, type-safe, atomic-style compatible Vue 3 Hooks collection",
   "main": "dist/vue-hooks-kit.umd.js",
@@ -25,11 +25,19 @@
     "pub": "pnpm run lint && pnpm run test && pnpm run build && npm publish"
   },
   "dependencies": {
+    "vue": "^3.4.0"
+  },
+  "peerDependencies": {
     "@vueuse/core": "^10.0.0",
     "axios": "^1.6.0",
     "pinia": "^2.1.0",
-    "vue": "^3.4.0",
     "vue-router": "^4.2.0"
+  },
+  "peerDependenciesMeta": {
+    "@vueuse/core": { "optional": true },
+    "axios": { "optional": true },
+    "pinia": { "optional": true },
+    "vue-router": { "optional": true }
   },
   "devDependencies": {
     "@commitlint/cli": "^18.0.0",

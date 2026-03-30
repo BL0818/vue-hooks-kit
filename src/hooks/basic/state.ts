@@ -10,6 +10,15 @@ interface StorageOptions<T> {
   expire?: number // 过期时间（毫秒）
 }
 
+function isExpiredStorageObject(obj: unknown): obj is { value: unknown; expire: number } {
+  return (
+    obj !== null &&
+    typeof obj === 'object' &&
+    'value' in obj &&
+    'expire' in obj
+  )
+}
+
 function useStorage<T>(
   key: string,
   defaultValue: T,
@@ -25,49 +34,61 @@ function useStorage<T>(
   } = options
 
   const data = ref<T>(defaultValue) as Ref<T>
+  let initialized = false
 
-  // 初始化
+  // 初始化：从 storage 读取（不触发 watch 写回）
   try {
     const raw = storage.getItem(key)
     if (raw) {
       const parsed = JSON.parse(raw)
-      // 检查是否包含过期时间结构
-      if (parsed && typeof parsed === 'object' && 'value' in parsed && 'expire' in parsed) {
+      if (isExpiredStorageObject(parsed)) {
         const now = Date.now()
         if (parsed.expire && now > parsed.expire) {
           storage.removeItem(key)
         } else {
-          data.value = parsed.value
+          data.value = parsed.value as T
         }
       } else {
-        // 兼容旧数据或直接存储的数据
+        // 兼容旧数据或直接存储的数据 — 使用 serializer
         data.value = serializer.read(raw)
       }
+      initialized = true
     }
   } catch (e) {
     console.warn(e)
   }
 
-  // 监听变化
+  // 监听变化（仅在用户修改时写入，不使用 immediate）
   watch(
     data,
     (newValue) => {
+      // Skip first write if data was just loaded from storage
+      if (!initialized) {
+        initialized = true
+        return
+      }
+
       try {
         if (newValue === null || newValue === undefined) {
           storage.removeItem(key)
+        } else if (expire) {
+          const wrapped = { value: newValue, expire: Date.now() + expire }
+          storage.setItem(key, serializer.write(wrapped as T))
         } else {
-          const storedValue = {
-            value: newValue,
-            expire: expire ? Date.now() + expire : null,
-          }
-          storage.setItem(key, JSON.stringify(storedValue))
+          storage.setItem(key, serializer.write(newValue))
         }
       } catch (e) {
         console.warn(e)
       }
     },
-    { deep: true, immediate: true } // 立即执行以确保初始值被写入（如果需要）
+    { deep: true }
   )
+
+  // Mark as initialized after first user-triggered change
+  // If storage was empty, the next change should write
+  if (!initialized) {
+    initialized = true
+  }
 
   return data
 }
@@ -104,7 +125,7 @@ export function useDebouncedRef<T>(value: T, delay = 200) {
 export function useThrottledRef<T>(value: T, delay = 200) {
   let timeout: ReturnType<typeof setTimeout>
   let lastExec = 0
-  
+
   return customRef((track, trigger) => {
     return {
       get() {
@@ -118,12 +139,12 @@ export function useThrottledRef<T>(value: T, delay = 200) {
           lastExec = now
           trigger()
         } else {
-            clearTimeout(timeout)
-            timeout = setTimeout(() => {
-                value = newValue
-                lastExec = Date.now()
-                trigger()
-            }, delay - (now - lastExec))
+          clearTimeout(timeout)
+          timeout = setTimeout(() => {
+            value = newValue
+            lastExec = Date.now()
+            trigger()
+          }, delay - (now - lastExec))
         }
       },
     }

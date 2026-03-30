@@ -1,24 +1,26 @@
 import { ref, unref, watch, onUnmounted, type Ref, shallowRef } from 'vue'
-import axios, { type AxiosRequestConfig, type AxiosResponse, type AxiosError, CanceledError } from 'axios'
+import axios, { type AxiosRequestConfig, CanceledError } from 'axios'
 
-// 简单的内存缓存
-const cache = new Map<string, { data: any; expire: number }>()
-
-export interface UseRequestOptions<T = any> {
+export interface UseRequestOptions<T = unknown> {
   manual?: boolean
   initialData?: T
-  onSuccess?: (data: T, params: any[]) => void
-  onError?: (error: unknown, params: any[]) => void
+  onSuccess?: (data: T, params: unknown[]) => void
+  onError?: (error: unknown, params: unknown[]) => void
   onFinally?: () => void
   cacheKey?: string
-  cacheTime?: number // 毫秒
+  cacheTime?: number // ms
   retryCount?: number
   retryDelay?: number
-  loadingKeep?: number // loading 状态保持至少多长时间，避免闪烁
+  loadingKeep?: number // ms — keep loading state for at least this duration to avoid flicker
 }
 
-export function useRequest<T = any>(
-  service: AxiosRequestConfig | ((...args: any[]) => AxiosRequestConfig | Promise<T>),
+interface CacheEntry<T> {
+  data: T
+  expire: number
+}
+
+export function useRequest<T = unknown>(
+  service: AxiosRequestConfig | ((...args: unknown[]) => AxiosRequestConfig | Promise<T>),
   options: UseRequestOptions<T> = {}
 ) {
   const {
@@ -37,10 +39,20 @@ export function useRequest<T = any>(
   const data = shallowRef<T | undefined>(initialData)
   const error = shallowRef<unknown | undefined>(undefined)
   const loading = ref(false)
-  
+
+  // Per-instance cache (avoids module-level memory leak)
+  const cache = new Map<string, CacheEntry<T>>()
+
   let abortController: AbortController | null = null
   let retryTimes = 0
   let loadingTimer: ReturnType<typeof setTimeout> | null = null
+
+  const clearLoadingTimer = () => {
+    if (loadingTimer) {
+      clearTimeout(loadingTimer)
+      loadingTimer = null
+    }
+  }
 
   const cancel = () => {
     if (abortController) {
@@ -49,8 +61,14 @@ export function useRequest<T = any>(
     }
   }
 
-  const runAsync = async (...params: any[]): Promise<T> => {
-    // 检查缓存
+  const finishLoading = () => {
+    loading.value = false
+    retryTimes = 0
+    onFinally?.()
+  }
+
+  const runAsync = async (...params: unknown[]): Promise<T> => {
+    // Check cache
     if (cacheKey) {
       const cached = cache.get(cacheKey)
       if (cached && cached.expire > Date.now()) {
@@ -58,9 +76,13 @@ export function useRequest<T = any>(
         onSuccess?.(cached.data, params)
         return cached.data
       }
+      // Expired entry cleanup
+      if (cached) {
+        cache.delete(cacheKey)
+      }
     }
 
-    cancel() // 取消上一次请求
+    cancel() // Cancel previous request
     abortController = new AbortController()
 
     const startTime = Date.now()
@@ -72,47 +94,48 @@ export function useRequest<T = any>(
       if (typeof service === 'function') {
         const result = service(...params)
         if (result instanceof Promise) {
-          // 如果传入的是返回 Promise 的函数（非纯 Axios 配置构建器）
-          // 我们这里简单处理，无法自动注入 signal，除非用户自己处理
-          // 但如果是返回 config，我们可以处理
-          // 这里假设如果是 Promise，就是直接调用的结果，我们无法 cancel 除非用户逻辑支持
-          // 为了严谨，我们主要支持 AxiosRequestConfig
-           // 但为了兼容性，如果返回 Promise，直接 await
-           const res = await result
-           data.value = res
-           if (cacheKey) {
-             cache.set(cacheKey, { data: res, expire: Date.now() + cacheTime })
-           }
-           onSuccess?.(res, params)
-           return res
+          // If the service function returns a Promise directly (not an AxiosRequestConfig),
+          // we cannot inject the AbortController signal.
+          // Await it directly for compatibility.
+          const res = await result
+          if (abortController?.signal.aborted) return new Promise<T>(() => {})
+
+          data.value = res as T
+          if (cacheKey) {
+            cache.set(cacheKey, { data: res as T, expire: Date.now() + cacheTime })
+          }
+          onSuccess?.(res as T, params)
+          return res as T
         }
         config = result
       } else {
         config = service
       }
 
-      // 注入 signal
+      // Inject signal for cancellation
       const res = await axios({
         ...config,
         signal: abortController.signal,
       })
 
-      const resData = res.data
+      if (abortController?.signal.aborted) return new Promise<T>(() => {})
+
+      const resData = res.data as T
       data.value = resData
-      
+
       if (cacheKey) {
         cache.set(cacheKey, { data: resData, expire: Date.now() + cacheTime })
       }
 
       onSuccess?.(resData, params)
       return resData
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err instanceof CanceledError) {
-        // 被取消，不视为错误
-        return new Promise(() => {}) // 永不 resolve
+        // Cancelled — don't treat as error, never resolve
+        return new Promise<T>(() => {})
       }
 
-      // 重试逻辑
+      // Retry logic
       if (retryTimes < retryCount) {
         retryTimes++
         await new Promise((resolve) => setTimeout(resolve, retryDelay))
@@ -123,31 +146,31 @@ export function useRequest<T = any>(
       onError?.(err, params)
       throw err
     } finally {
-      retryTimes = 0 // 重置重试计数（如果成功或最终失败）
+      // Only reset retryTimes and loading after the entire retry chain completes
       const duration = Date.now() - startTime
       if (duration < loadingKeep) {
         loadingTimer = setTimeout(() => {
-          loading.value = false
-          onFinally?.()
+          finishLoading()
         }, loadingKeep - duration)
       } else {
-        loading.value = false
-        onFinally?.()
+        finishLoading()
       }
     }
   }
 
-  const run = (...params: any[]) => {
-    runAsync(...params).catch((err) => {
+  const run = (...params: unknown[]) => {
+    runAsync(...params).catch((err: unknown) => {
       console.error('useRequest error:', err)
     })
   }
 
   const refresh = () => {
-    // 这里参数可能丢失，如果需要 refresh，可能需要保存上一次的 params
-    // 简单起见，暂不支持带参数的自动 refresh，或者假设无参
-    // 更好的做法是保存 lastParams
-    run() 
+    run()
+  }
+
+  // Clear cache entries (public API for manual cleanup)
+  const clearCache = () => {
+    cache.clear()
   }
 
   if (!manual) {
@@ -156,7 +179,8 @@ export function useRequest<T = any>(
 
   onUnmounted(() => {
     cancel()
-    if (loadingTimer) clearTimeout(loadingTimer)
+    clearLoadingTimer()
+    cache.clear()
   })
 
   return {
@@ -167,5 +191,6 @@ export function useRequest<T = any>(
     runAsync,
     cancel,
     refresh,
+    clearCache,
   }
 }
