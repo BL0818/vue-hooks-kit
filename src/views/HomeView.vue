@@ -29,7 +29,7 @@ const { t } = useLanguage()
             {{ t.hero.getStarted }}
             <div class="i-carbon-arrow-right text-lg"></div>
           </router-link>
-          <a href="https://github.com" target="_blank" class="btn-secondary flex items-center justify-center gap-2 text-base px-8 py-3">
+          <a href="https://github.com/BL0818/vue-hooks-kit" target="_blank" class="btn-secondary flex items-center justify-center gap-2 text-base px-8 py-3">
             <div class="i-carbon-logo-github text-xl"></div>
             {{ t.hero.viewOnGithub }}
           </a>

@@ -30,7 +30,7 @@ const { t, toggleLanguage, currentLang } = useLanguage()
               <span>{{ t.nav.more }}</span>
             </router-link>
             
-            <a href="https://github.com" target="_blank" class="w-10 h-10 flex items-center justify-center rounded-xl text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-primary dark:hover:text-primary transition-all duration-200 no-underline" title="GitHub">
+            <a href="https://github.com/BL0818/vue-hooks-kit" target="_blank" class="w-10 h-10 flex items-center justify-center rounded-xl text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-primary dark:hover:text-primary transition-all duration-200 no-underline" title="GitHub">
               <i class="i-carbon-logo-github text-xl"></i>
             </a>
 
