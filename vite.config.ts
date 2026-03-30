@@ -3,6 +3,7 @@ import vue from '@vitejs/plugin-vue'
 import UnoCSS from 'unocss/vite'
 import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
+import dts from 'vite-plugin-dts'
 import { resolve } from 'path'
 
 export default defineConfig({
@@ -15,6 +16,10 @@ export default defineConfig({
     }),
     Components({
       dts: 'src/components.d.ts',
+    }),
+    dts({
+      include: ['src/hooks'],
+      outDir: 'dist',
     }),
   ],
   resolve: {
